@@ -205,6 +205,39 @@ static void problem(enum problem_type p, int v)
 }
 
 #ifdef CONFIG_EC_EC_COMM_BATTERY_MASTER
+static int battery_sustainer_set(int8_t lower, int8_t upper)
+{
+	if (lower == -1 || upper == -1) {
+		CPRINTS("Sustain mode disabled");
+		sustain_soc.lower = -1;
+		sustain_soc.upper = -1;
+		return EC_SUCCESS;
+	}
+
+	if (lower <= upper && 0 <= lower && upper <= 100) {
+		/* Currently sustainer requires discharge_on_ac. */
+		if (!IS_ENABLED(CONFIG_CHARGER_DISCHARGE_ON_AC))
+			return EC_RES_UNAVAILABLE;
+		sustain_soc.lower = lower;
+		sustain_soc.upper = upper;
+		return EC_SUCCESS;
+	}
+
+	CPRINTS("Invalid param: %s(%d, %d)", __func__, lower, upper);
+	return EC_ERROR_INVAL;
+}
+
+static void battery_sustainer_disable(void)
+{
+	battery_sustainer_set(-1, -1);
+}
+
+static bool battery_sustainer_enabled(void)
+{
+	return sustain_soc.lower != -1 && sustain_soc.upper != -1;
+}
+
+#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
 /*
  * Parameters for dual-battery policy.
  * TODO(b:71881017): This should be made configurable by AP in the future.
@@ -1156,7 +1189,8 @@ static void dump_charge_state(void)
 		 battery_seems_to_be_disconnected);
 	ccprintf("battery_was_removed = %d\n", battery_was_removed);
 	ccprintf("debug output = %s\n", debugging ? "on" : "off");
-	ccprintf("sustain charge = %d%% ~ %d%%\n",
+	ccprintf("Battery sustainer = %s (%d%% ~ %d%%)\n",
+		 battery_sustainer_enabled() ? "on" : "off",
 		 sustain_soc.lower, sustain_soc.upper);
 #undef DUMP
 }
@@ -2658,7 +2692,32 @@ static enum ec_status
 charge_command_charge_control(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_charge_control *p = args->params;
+	struct ec_response_charge_control *r = args->response;
 	int rv;
+
+	if (args->version >= 2) {
+		if (p->cmd == EC_CHARGE_CONTROL_CMD_SET) {
+			if (chg_ctl_mode == CHARGE_CONTROL_NORMAL) {
+				rv = battery_sustainer_set(
+						p->sustain_soc.lower,
+						p->sustain_soc.upper);
+				if (rv == EC_RES_UNAVAILABLE)
+					return EC_RES_UNAVAILABLE;
+				if (rv)
+					return EC_RES_INVALID_PARAM;
+			} else {
+				battery_sustainer_disable();
+			}
+		} else if (p->cmd == EC_CHARGE_CONTROL_CMD_GET) {
+			r->mode = chg_ctl_mode;
+			r->sustain_soc.lower = sustain_soc.lower;
+			r->sustain_soc.upper = sustain_soc.upper;
+			args->response_size = sizeof(*r);
+			return EC_RES_SUCCESS;
+		} else {
+			return EC_RES_INVALID_PARAM;
+		}
+	}
 
 	rv = set_chg_ctrl_mode(p->mode);
 	if (rv != EC_SUCCESS)
@@ -2693,7 +2752,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_CHARGE_CONTROL, charge_command_charge_control,
-		     EC_VER_MASK(1));
+		     EC_VER_MASK(1) | EC_VER_MASK(2));
 
 static void reset_current_limit(void)
 {

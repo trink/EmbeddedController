@@ -52,8 +52,8 @@ struct charge_state_data {
 };
 
 struct sustain_soc {
-	int16_t lower;
-	int16_t upper;
+	int8_t lower;
+	int8_t upper;
 };
 
 /**
