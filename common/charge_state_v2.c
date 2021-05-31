@@ -14,8 +14,9 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "ec_ec_comm_master.h"
-#include "ec_ec_comm_slave.h"
+#include "ec_commands.h"
+#include "ec_ec_comm_client.h"
+#include "ec_ec_comm_server.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -1120,6 +1121,9 @@ static const char * const batt_pres[] = {
 	"NO", "YES", "NOT_SURE",
 };
 
+const char *mode_text[] = EC_CHARGE_MODE_TEXT;
+BUILD_ASSERT(ARRAY_SIZE(mode_text) == CHARGE_CONTROL_COUNT);
+
 static void dump_charge_state(void)
 {
 #define DUMP(FLD, FMT) ccprintf(#FLD " = " FMT "\n", curr.FLD)
@@ -1180,7 +1184,9 @@ static void dump_charge_state(void)
 #ifdef CONFIG_EC_EC_COMM_BATTERY_MASTER
 	DUMP(input_voltage, "%dmV");
 #endif
-	ccprintf("chg_ctl_mode = %d\n", chg_ctl_mode);
+	ccprintf("chg_ctl_mode = %s (%d)\n",
+		 chg_ctl_mode < CHARGE_CONTROL_COUNT
+		 	? mode_text[chg_ctl_mode] : "UNDEF", chg_ctl_mode);
 	ccprintf("manual_voltage = %d\n", manual_voltage);
 	ccprintf("manual_current = %d\n", manual_current);
 	ccprintf("user_current_limit = %dmA\n", user_current_limit);
@@ -1667,41 +1673,47 @@ static int battery_outside_charging_temperature(void)
 }
 #endif
 
-static void sustain_soc_disable(void)
-{
-	sustain_soc.lower = -1;
-	sustain_soc.upper = -1;
-}
-
-static int sustain_soc_set(int16_t lower, int16_t upper)
-{
-	if (sustain_soc.lower < sustain_soc.upper
-			&& 0 <= sustain_soc.lower && sustain_soc.upper <= 100) {
-		sustain_soc.lower = lower;
-		sustain_soc.upper = upper;
-		return EC_SUCCESS;
-	}
-
-	CPRINTS("Invalid param: %s(%d, %d)", __func__, lower, upper);
-	return EC_ERROR_INVAL;
-}
-
-static bool sustain_soc_enabled(void)
-{
-	return sustain_soc.lower != -1 && sustain_soc.upper != -1;
-}
-
 static void sustain_battery_soc(void)
 {
-	/* If both of AC and battery aren't present, nothing to do. */
+	enum ec_charge_control_mode mode = chg_ctl_mode;
+	int soc;
+	int rv;
+
+	/* If either AC or battery is not present, nothing to do. */
 	if (!curr.ac || curr.batt.is_present != BP_YES
-			|| !sustain_soc_enabled())
+			|| !battery_sustainer_enabled())
 		return;
 
-	if (curr.batt.state_of_charge < sustain_soc.lower)
-		set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
-	else if (sustain_soc.upper < curr.batt.state_of_charge)
-		set_chg_ctrl_mode(CHARGE_CONTROL_DISCHARGE);
+	soc = charge_get_display_charge() / 10;
+
+	switch (chg_ctl_mode) {
+	case CHARGE_CONTROL_NORMAL:
+		/* Going up */
+		if (sustain_soc.upper < soc)
+			mode = CHARGE_CONTROL_DISCHARGE;
+		break;
+	case CHARGE_CONTROL_IDLE:
+		/* discharging naturally */
+		if (soc < sustain_soc.lower)
+			/* TODO: Charge slowly */
+			mode = CHARGE_CONTROL_NORMAL;
+		break;
+	case CHARGE_CONTROL_DISCHARGE:
+		/* discharging rapidly (discharge_on_ac) */
+		if (soc < sustain_soc.upper)
+			mode = CHARGE_CONTROL_IDLE;
+		break;
+	default:
+		return;
+	}
+
+	if (mode == chg_ctl_mode)
+		return;
+
+	rv = set_chg_ctrl_mode(mode);
+	CPRINTS("%s: %s control mode to %s",
+		__func__, rv == EC_SUCCESS ? "Switched" : "Failed to switch",
+		mode_text[mode]);
 }
 
 /*****************************************************************************/
@@ -1720,7 +1732,7 @@ void charger_init(void)
 	 */
 	battery_get_params(&curr.batt);
 
-	sustain_soc_disable();
+	battery_sustainer_disable();
 }
 DECLARE_HOOK(HOOK_INIT, charger_init, HOOK_PRIO_DEFAULT);
 
@@ -1865,7 +1877,7 @@ void charger_task(void *u)
 				}
 			} else {
 				/* Some things are only meaningful on AC */
-				chg_ctl_mode = CHARGE_CONTROL_NORMAL;
+				set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
 				battery_seems_to_be_dead = 0;
 				prev_ac = curr.ac;
 			}
@@ -2988,7 +3000,7 @@ static int command_chgstate(int argc, char **argv)
 			upper = strtoi(argv[3], &e, 0);
 			if (*e)
 				return EC_ERROR_PARAM3;
-			rv = sustain_soc_set(lower, upper);
+			rv = battery_sustainer_set(lower, upper);
 			if (rv)
 				return EC_ERROR_INVAL;
 		} else {
@@ -3001,7 +3013,7 @@ static int command_chgstate(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(chgstate, command_chgstate,
 			"[idle|discharge|debug on|off]"
-			"\n[sustain lower upper]",
+			"\n[sustain <lower> <upper>]",
 			"Get/set charge state machine status");
 
 #ifdef CONFIG_EC_EC_COMM_BATTERY_MASTER
