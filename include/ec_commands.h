@@ -4177,6 +4177,11 @@ enum ec_charge_control_mode {
 
 struct ec_params_charge_control {
 	uint32_t mode;  /* enum charge_control_mode */
+	/* For sustain charge (v2). The struct doesn't need to be exported. */
+	struct {
+		int16_t lower;
+		int16_t upper;
+	} sustain_charge;
 } __ec_align4;
 
 /*****************************************************************************/
