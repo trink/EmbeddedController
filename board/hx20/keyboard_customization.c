@@ -26,6 +26,7 @@
 #define CPRINTF(format, args...) cprintf(CC_KEYBOARD, format, ## args)
 
 #define SCANCODE_CTRL_ESC 0x0101
+#define SCANCODE_ENTER 0x005a
 
 static uint8_t console_keyboard_mode;
 int try_console_enqueue(uint16_t* make_code, int8_t pressed);
@@ -523,6 +524,43 @@ int try_ctrl_esc(uint16_t *key_code, int8_t pressed) {
 		}
 		return EC_ERROR_UNIMPLEMENTED; // placeholder to make the scan fail out
 	}
+
+	return EC_SUCCESS;
+}
+
+static uint8_t ctrlenter_state = 0; // 0 = nothing, 1 = down, 2 = ctrl fired
+static void ctrlenter_fire_ctrl(void) {
+	// After 200ms, if the key is still down, fire a make for ctrl
+	if (ctrlenter_state == 1) {
+		simulate_keyboard(SCANCODE_RIGHT_CTRL, 1); // MAKE CTRL
+		ctrlenter_state = 2;
+	}
+
+	// if we got here, it accidentally double-fired
+}
+DECLARE_DEFERRED(ctrlenter_fire_ctrl);
+
+int try_ctrl_enter(uint16_t *key_code, int8_t pressed) {
+	if (*key_code == SCANCODE_ENTER) {
+		if (pressed) {
+			ctrlenter_state = 1;
+			hook_call_deferred(&ctrlenter_fire_ctrl_data, 200000); // 200msec
+		} else {
+			if (ctrlenter_state == 1) {
+				// Cancel the ctrl key firing
+				hook_call_deferred(&ctrlenter_fire_ctrl_data, -1);
+
+				// Send a make/break for ENTER
+				simulate_keyboard(SCANCODE_ENTER, 1); // MAKE  ENTER
+				simulate_keyboard(SCANCODE_ENTER, 0); // BREAK ENTER
+			} else if (ctrlenter_state == 2) {
+				// We already sent a make for CTRL, let's send a break
+				simulate_keyboard(SCANCODE_RIGHT_CTRL, 0); // BREAK CTRL
+			}
+			ctrlenter_state = 0;
+		}
+		return EC_ERROR_UNIMPLEMENTED; // placeholder to make the scan fail out
+	}
 	return EC_SUCCESS;
 }
 
@@ -553,6 +591,10 @@ enum ec_error_list keyboard_scancode_callback(uint16_t *make_code,
 	// TODO: make FN+CAPS = Caps (we need to pre-check here whether we're
 	// tracking the Fn key state)
 	r = try_ctrl_esc(make_code, pressed);
+	if (r != EC_SUCCESS)
+		return r;
+
+	r = try_ctrl_enter(make_code, pressed);
 	if (r != EC_SUCCESS)
 		return r;
 
