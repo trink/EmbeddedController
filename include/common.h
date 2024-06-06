@@ -199,7 +199,9 @@
 #define C_TO_K(temp_c) ((temp_c) + 273)
 #define K_TO_C(temp_c) ((temp_c) - 273)
 #define CELSIUS_TO_DECI_KELVIN(temp_c) ((temp_c) * 10 + 2731)
+#define MILLI_CELSIUS_TO_MILLI_KELVIN(temp_mc) ((temp_mc) + 273150)
 #define DECI_KELVIN_TO_CELSIUS(temp_dk) ((temp_dk - 2731) / 10)
+#define MILLI_KELVIN_TO_KELVIN(temp_mk) (round_divide((temp_mk), 1000))
 
 /* Calculate a value with error margin considered. For example,
  * TARGET_WITH_MARGIN(X, 5) returns X' where X' * 100.5% is almost equal to
