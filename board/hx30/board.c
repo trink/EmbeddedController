@@ -1007,19 +1007,19 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_LOCAL] = {
 		.name = "F75303_Local",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = f75303_get_val_mk,
+		.read = f75303_get_val,
 		.idx = F75303_IDX_LOCAL
 	},
 	[TEMP_SENSOR_CPU] = {
 		.name = "F75303_CPU",
 		.type = TEMP_SENSOR_TYPE_CPU,
-		.read = f75303_get_val_mk,
+		.read = f75303_get_val,
 		.idx = F75303_IDX_REMOTE2
 	},
 	[TEMP_SENSOR_DDR] = {
 		.name = "F75303_DDR",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = f75303_get_val_mk,
+		.read = f75303_get_val,
 		.idx = F75303_IDX_REMOTE1
 	},
 	[TEMP_SENSOR_BATTERY] = {

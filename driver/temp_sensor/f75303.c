@@ -38,7 +38,7 @@ static int raw_read8(const int offset, int *data)
 			 offset, data);
 }
 
-#ifndef CONFIG_CUSTOMZIED_DESIGN
+#ifndef CONFIG_CUSTOMIZED_DESIGN
 static int get_temp(const int offset, int *temp)
 {
 	int rv;
@@ -100,7 +100,7 @@ int f75303_get_val(int idx, int *temp)
 	if (!f75303_enabled)
 		return EC_ERROR_NOT_POWERED;
 
-	*temp = temps[idx];
+	*temp = MILLI_KELVIN_TO_KELVIN(temps[idx]);
 	return EC_SUCCESS;
 }
 
