@@ -26,6 +26,14 @@
 /*****************************************************************************/
 /* EC-specific thermal controls */
 
+#ifdef CONFIG_CUSTOMIZED_DESIGN
+
+__overridable void board_update_temperature_mk(enum temp_sensor_id id)
+{
+}
+
+#endif
+
 test_mockable_static void smi_sensor_failure_warning(void)
 {
 	CPRINTS("can't read any temp sensors!");

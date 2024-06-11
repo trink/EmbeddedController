@@ -25,3 +25,4 @@ board-$(CONFIG_POWER_BUTTON_CUSTOM) += power_button_x86.o
 board-$(CONFIG_PECI) += peci_customization.o peci_over_espi.o
 board-$(HAS_TASK_HOSTCMD) += host_command_customization.o
 board-$(CONFIG_I2C_HID_MEDIAKEYS) += i2c_hid_mediakeys.o
+board-$(CONFIG_DTT_SUPPORT) += temperature.o

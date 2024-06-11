@@ -363,6 +363,8 @@
 #define EC_MEMMAP_ER1_BATT_MANUF_DAY		0x44 /* Manufacturer date - day */
 #define EC_MEMMAP_ER1_BATT_MANUF_MONTH		0x45 /* Manufacturer date - month */
 #define EC_MEMMAP_ER1_BATT_MANUF_YEAR		0x46 /* Manufacturer date - year */
+#define EC_CUSTOMIZED_MEMMAP_DTT_TEMP 		0x60
+
 
 #define EC_BATT_FLAG_FULL		BIT(0) /* Full Charged */
 #define EC_BATT_TYPE			BIT(1) /* (0: NiMh,1: LION) */
@@ -463,6 +465,12 @@
  */
 #define CONFIG_FAN_VIRTUAL_TEMP
 
+/*
+ * Enable more temp memmap for intel DTT
+ */
+#define CONFIG_DTT_SUPPORT
+
+#define CONFIG_CUSTOMIZED_DESIGN
 
 /* LED signals */
 /*
