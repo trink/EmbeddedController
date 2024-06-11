@@ -66,11 +66,10 @@ int fan_percent_to_rpm(int fan_index, int temp_ratio)
 	int max = fans[fan_index].rpm->rpm_max;
 	int min = fans[fan_index].rpm->rpm_min;
 
-	if (temp_ratio <= 0) {
+	if (temp_ratio <= 0)
 		rpm = 0;
-	} else {
+	else
 		rpm = ((temp_ratio - 1) * max + (100 - temp_ratio) * min) / 99;
-	}
 
 	return rpm;
 }
@@ -96,7 +95,7 @@ void board_override_fan_control(int fan, int *temp)
 
 	/*
 	 * CPRINTS("fan: %d, is_thermal_control_enabled: %d", fan, is_thermal_control_enabled(fan));
-	 * */
+	 */
 	if (!is_thermal_control_enabled(fan))
 		return;
 
@@ -106,9 +105,9 @@ void board_override_fan_control(int fan, int *temp)
 	 */
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
 
-		if (fan == 0) {
+		if (fan == 0)
 			thermal_filter_update(&apu_filtered, temp[TEMP_APU]);
-		}
+
 		/*f75303_get_val_mk(TEMP_CPU_F, &apu_temp_mk); */
 
 		apu_filtered_temp = thermal_filter_get(&apu_filtered);

@@ -54,7 +54,7 @@ static int get_temp(const int offset, int *temp)
 	return EC_SUCCESS;
 }
 #else
-static int get_temp( const int offset, int *temp)
+static int get_temp(const int offset, int *temp)
 {
 	int rv;
 	int data = 0;
