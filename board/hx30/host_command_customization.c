@@ -279,10 +279,12 @@ static enum ec_status bb_retimer_control(struct host_cmd_handler_args *args)
 
 	switch (p->modes) {
 	case BB_ENTRY_FW_UPDATE_MODE:
-		entry_tbt_mode(p->controller);
+		r->status = entry_tbt_mode(p->controller);
+		args->response_size = sizeof(*r);
 		break;
 	case BB_EXIT_FW_UPDATE_MODE:
-		exit_tbt_mode(p->controller);
+		r->status =  exit_tbt_mode(p->controller);
+		args->response_size = sizeof(*r);
 		break;
 	case BB_ENABLE_COMPLIANCE_MODE:
 		enable_compliance_mode(p->controller);
