@@ -317,6 +317,7 @@
 #undef CONFIG_ALS_BH1730_LUXTH_PARAMS
 #undef CONFIG_ALS_ISL29035
 #undef CONFIG_ALS_OPT3001
+#undef CONFIG_ALS_CM32183
 /* Define the exact model ID present on the board: SI1141 = 41, SI1142 = 42, */
 #undef CONFIG_ALS_SI114X
 /* Check if the device revision is supported */
@@ -633,6 +634,11 @@
  * Smart battery pass-through host commands.
  */
 #undef CONFIG_SB_PASSTHROUGH
+
+/*
+ * Customize the battery behavior.
+ */
+#undef CONFIG_BATT_CUSTOM_SETTING
 
 /*
  * Expose some data when it is needed.
@@ -4313,6 +4319,12 @@
 
 /* Define if tcpc on the board supports VBUS measurement */
 #undef CONFIG_USB_PD_VBUS_MEASURE_TCPC
+
+/*
+ * Define if system use stand alone pd solution.
+ * For stand alone solution, PD control VBUS itself, and will notify ec.
+ */
+#undef CONFIG_USB_PD_VBUS_CTRL_BY_PD_CHIP
 
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E

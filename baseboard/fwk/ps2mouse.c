@@ -220,6 +220,20 @@ void touchpad_i2c_interrupt(enum gpio_signal signal)
  */
 timestamp_t last_int_time;
 int unprocessed_tp_int_count;
+
+void tp_int_count_clear(void)
+{
+	/*
+	 * The touchpad will assert the interrupt when HID driver does the HID reset,
+	 * due to the GPIO_EC_I2C_3_SDA does not have interrupt function, so the
+	 * detected_host_packet does not set to true when HID driver is working.
+	 *
+	 * If we don't clear this count every power on, EC will re-enable the touchpad
+	 * and cause the HID driver yellow bang
+	 */
+	unprocessed_tp_int_count = 0;
+}
+
 void touchpad_interrupt(enum gpio_signal signal)
 {
 	timestamp_t now = get_time();
@@ -294,9 +308,18 @@ void set_ps2_mouse_emulation(bool disable)
 }
 void set_power(bool standby)
 {
-	int data = BIT(11) + standby ? 1 : 0;
+	uint16_t data = BIT(11) | (standby ? 0x01 : 0x0);
 
-	i2c_write_offset16(I2C_PORT_TOUCHPAD, TOUCHPAD_I2C_HID_EP | I2C_FLAG_ADDR16_LITTLE_ENDIAN, PCT3854_COMMAND, data, 1);
+	i2c_write_offset16(I2C_PORT_TOUCHPAD,
+		TOUCHPAD_I2C_HID_EP | I2C_FLAG_ADDR16_LITTLE_ENDIAN, PCT3854_COMMAND, data, 2);
+}
+
+void set_reset(void)
+{
+	uint16_t data = BIT(8);
+
+	i2c_write_offset16(I2C_PORT_TOUCHPAD,
+		TOUCHPAD_I2C_HID_EP | I2C_FLAG_ADDR16_LITTLE_ENDIAN, PCT3854_COMMAND, data, 2);
 }
 
 void setup_touchpad(void)
@@ -329,15 +352,15 @@ void read_touchpad_in_report(void)
 	int need_reset = 0;
 	uint8_t data[128];
 	int xfer_len = 0;
+	int report_mode = PS2MOUSE_REPORT_UNKNOWN;
 	int16_t x, y;
 	uint8_t response_byte = 0x08;
 
 	/* Make sure report id is set to an invalid value */
 	data[2] = 0;
 
-	if (power_get_state() == POWER_S5) {
+	if (power_get_state() == POWER_S5)
 		return;
-	}
 
 	/*dont trigger disable state during our own transactions*/
 	gpio_disable_interrupt(GPIO_EC_I2C_3_SDA);
@@ -360,13 +383,15 @@ void read_touchpad_in_report(void)
 		CPRINTS("PS2M Touchpad need to reset");
 		xfer_len = 6;
 		need_reset = 1;
-	}
+	} else if (xfer_len == 7)
+		report_mode = PS2MOUSE_REPORT_HYBRID;
+	else if (xfer_len == 8)
+		report_mode = PS2MOUSE_REPORT_PARALLEL;
+
 	xfer_len = MIN(126, xfer_len-2);
 	rv = i2c_xfer_unlocked(I2C_PORT_TOUCHPAD,
 							TOUCHPAD_I2C_HID_EP | I2C_FLAG_ADDR16_LITTLE_ENDIAN,
 							NULL, 0, data+2, xfer_len, I2C_XFER_STOP);
-	if (rv != EC_SUCCESS)
-		goto read_failed;
 read_failed:
 	if (rv != EC_SUCCESS) {
 		/* sometimes we get a read failed for unknown reason to try again in a while
@@ -394,6 +419,7 @@ read_failed:
 	i2c_lock(I2C_PORT_TOUCHPAD, 0);
 	gpio_enable_interrupt(GPIO_EC_I2C_3_SDA);
 	gpio_enable_interrupt(GPIO_SOC_TP_INT_L);
+
 	 if (mouse_state == PS2MSTATE_RESET) {
 		 return;
 	 }
@@ -405,8 +431,20 @@ read_failed:
 	if (rv == EC_SUCCESS && data[2] == 0x02) {
 		/*0x0800 02 04 feff 0000
 		 *0x0800 02 04 fdff ffff */
-		x = (int16_t)(data[4] + (data[5] << 8));
-		y = -(int16_t)(data[6] + (data[7] << 8));
+		if (report_mode == PS2MOUSE_REPORT_HYBRID) {
+
+			if (data[4] & 0x80)
+				x = (int16_t)(data[4] + (0xff << 8));
+			else
+				x = (int16_t)data[4];
+			if (data[5] & 0x80)
+				y = -(int16_t)(data[5] + (0xff << 8));
+			else
+				y = -(int16_t)data[5];
+		} else {
+			x = (int16_t)(data[4] + (data[5] << 8));
+			y = -(int16_t)(data[6] + (data[7] << 8));
+		}
 		x = MIN(255, MAX(x, -255));
 		y = MIN(255, MAX(y, -255));
 		/*button data*/
@@ -450,6 +488,7 @@ void mouse_interrupt_handler_task(void *p)
 		if (evt & PS2MOUSE_EVT_HC_DISABLE && ec_mode_disabled == false) {
 			ec_mode_disabled = true;
 			CPRINTS("PS2M HC Disable");
+			tp_int_count_clear();
 			gpio_disable_interrupt(GPIO_SOC_TP_INT_L);
 			gpio_disable_interrupt(GPIO_EC_I2C_3_SDA);
 		}
@@ -470,14 +509,13 @@ void mouse_interrupt_handler_task(void *p)
 				for (i = 0; i < 4; i++) {
 					usleep(MSEC);
 					if (gpio_get_level(GPIO_SOC_TP_INT_L) == 1) {
-						CPRINTS("PS2M Detected host packet during interrupt handling");
+						CPRINTS("PS2M Detected host pkt during int");
 						detected_host_packet = true;
 						break;
 					}
 				}
-				if (detected_host_packet != true) {
+				if (detected_host_packet != true)
 					read_touchpad_in_report();
-				}
 			}
 
 			if  (evt & PS2MOUSE_EVT_I2C_INTERRUPT) {
@@ -494,6 +532,8 @@ void mouse_interrupt_handler_task(void *p)
 					CPRINTS("PS2M Configuring for ps2 emulation mode");
 					/*tp takes about 80 ms to come up, wait a bit*/
 					usleep(200*MSEC);
+					set_power(false);
+					set_reset();
 					setup_touchpad();
 
 					gpio_enable_interrupt(GPIO_SOC_TP_INT_L);
@@ -504,12 +544,17 @@ void mouse_interrupt_handler_task(void *p)
 				}
 				if (power_state == POWER_S0S3 || power_state == POWER_S5) {
 					/* Power Down */
+					set_power(true);
+					tp_int_count_clear();
 					gpio_disable_interrupt(GPIO_SOC_TP_INT_L);
 					gpio_disable_interrupt(GPIO_EC_I2C_3_SDA);
 				}
 			}
 			if (evt & PS2MOUSE_EVT_REENABLE) {
 				CPRINTS("PS2M renabling");
+				set_power(false);
+				set_reset();
+				setup_touchpad();
 				gpio_enable_interrupt(GPIO_SOC_TP_INT_L);
 				gpio_enable_interrupt(GPIO_EC_I2C_3_SDA);
 			}

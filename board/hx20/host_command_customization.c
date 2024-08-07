@@ -26,6 +26,7 @@
 #include "keyboard_8042_sharedlib.h"
 #include "diagnostics.h"
 #include "cpu_power.h"
+#include "flash_storage.h"
 #define CPRINTS(format, args...) cprints(CC_SWITCH, format, ## args)
 
 #ifdef CONFIG_EMI_REGION1
@@ -47,7 +48,12 @@ static void sci_enable(void)
 	/* when host set EC driver ready flag, EC need to enable SCI */
 		lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, SCI_HOST_EVENT_MASK);
 		update_soc_power_limit(true, false);
-		system_set_bbram(SYSTEM_BBRAM_IDX_AC_BOOT, ac_boot_status());
+
+	/*  Write the value in EEPROM */
+
+		flash_storage_update(FLASH_FLAGS_ACPOWERON, ac_boot_status() ? 1 : 0);
+		flash_storage_update(FLASH_FLAGS_STANDALONE, get_standalone_mode() ? 1 : 0);
+		flash_storage_commit();
 	} else
 		hook_call_deferred(&sci_enable_data, 250 * MSEC);
 }
@@ -135,7 +141,8 @@ static enum ec_status factory_mode(struct host_cmd_handler_args *args)
 		system_set_bbram(STSTEM_BBRAM_IDX_CHASSIS_MAGIC, EC_PARAM_CHASSIS_BBRAM_MAGIC);
 		system_set_bbram(STSTEM_BBRAM_IDX_CHASSIS_VTR_OPEN, 0);
 		system_set_bbram(STSTEM_BBRAM_IDX_CHASSIS_WAS_OPEN, 0);
-		system_set_bbram(SYSTEM_BBRAM_IDX_AC_BOOT, 0);
+		flash_storage_load_defaults();
+		flash_storage_commit();
 		system_set_bbram(STSTEM_BBRAM_IDX_FP_LED_LEVEL, 0);
 	}
 
@@ -165,6 +172,7 @@ static enum ec_status host_custom_command_hello(struct host_cmd_handler_args *ar
 	 */
 	s5_power_up_control(1);
 	update_me_change(0);
+	tp_int_count_clear();
 
 	/* clear ACPI ready flags for pre-os*/
 	*host_get_customer_memmap(0x00) &= ~BIT(0);
@@ -271,3 +279,14 @@ static enum ec_status chassis_open_check(struct host_cmd_handler_args *args)
 
 }
 DECLARE_HOST_COMMAND(EC_CMD_CHASSIS_OPEN_CHECK, chassis_open_check, EC_VER_MASK(0));
+
+
+static enum ec_status standalone_mode(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_standalone_mode *p = args->params;
+
+	set_standalone_mode((int)p->enable);
+	return EC_RES_SUCCESS;
+
+}
+DECLARE_HOST_COMMAND(EC_CMD_STANDALONE_MODE, standalone_mode, EC_VER_MASK(0));
