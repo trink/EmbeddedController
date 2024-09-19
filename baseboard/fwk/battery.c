@@ -212,6 +212,21 @@ enum battery_present battery_is_present(void)
 	return batt_pres;
 }
 
+uint32_t get_system_percentage(void)
+{
+	static uint32_t pre_os_percentage;
+	uint32_t memmap_cap = *(uint32_t *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	uint32_t memmap_lfcc = *(uint32_t *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	uint32_t os_percentage = 1000 * memmap_cap / (memmap_lfcc + 1);
+
+	/* ensure this value is valid */
+	if (os_percentage <= 1000 && os_percentage >= 0) {
+		pre_os_percentage = os_percentage;
+		return os_percentage;
+	} else
+		return pre_os_percentage;
+}
+
 #ifdef CONFIG_EMI_REGION1
 
 void battery_customize(struct charge_state_data *emi_info)
@@ -248,7 +263,7 @@ void battery_customize(struct charge_state_data *emi_info)
 
 	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_AVER_TEMP) = 
 							(emi_info->batt.temperature - 2731)/10;
-	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_PERCENTAGE) = emi_info->batt.display_charge/10;
+	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_PERCENTAGE) = get_system_percentage() / 10;
 	
 	if (emi_info->batt.status & STATUS_FULLY_CHARGED)
 		*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_STATUS) |= EC_BATT_FLAG_FULL;
@@ -314,24 +329,37 @@ void battery_customize(struct charge_state_data *emi_info)
 static void battery_percentage_control(void)
 {
 	enum ec_charge_control_mode new_mode;
+	static int in_percentage_control;
+	uint32_t batt_os_percentage = get_system_percentage();
 	int rv;
 
+	/**
+	 * If the host command EC_CMD_CHARGE_CONTROL set control mode to CHARGE_CONTROL_DISCHARGE
+	 * or CHARGE_CONTROL_IDLE, ignore the battery_percentage_control();
+	 */
+	if (!in_percentage_control && get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL)
+		return;
 
 	if (charging_maximum_level == NEED_RESTORE)
 		system_get_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, &charging_maximum_level);
 
 	if (charging_maximum_level & CHG_LIMIT_OVERRIDE) {
 		new_mode = CHARGE_CONTROL_NORMAL;
-		if (charge_get_percent() == 100)
+		if (batt_os_percentage == 1000)
 			charging_maximum_level = charging_maximum_level | 0x64;
 	} else if (charging_maximum_level < 20)
 		new_mode = CHARGE_CONTROL_NORMAL;
-	else if (charge_get_percent() > charging_maximum_level)
+	else if (batt_os_percentage > charging_maximum_level * 10) {
 		new_mode = CHARGE_CONTROL_DISCHARGE;
-	else if (charge_get_percent() == charging_maximum_level)
+		in_percentage_control = 1;
+	} else if (batt_os_percentage == charging_maximum_level * 10) {
 		new_mode = CHARGE_CONTROL_IDLE;
-	else
+		in_percentage_control = 1;
+	} else {
 		new_mode = CHARGE_CONTROL_NORMAL;
+		in_percentage_control = 0;
+	}
+
 
 	ccprints("Charge Limit mode = %d", new_mode);
 
@@ -445,6 +473,9 @@ __override void board_battery_compensate_params(struct batt_params *batt)
 	batt->flags &= ~BATT_FLAG_BAD_ANY;
 	batt->flags |= BATT_FLAG_RESPONSIVE;
 	batt_cache.flags |= BATT_FLAG_RESPONSIVE;
+
+	/* override the display charge value for Windows system */
+	batt->display_charge = get_system_percentage();
 }
 
 /*****************************************************************************/

@@ -7422,9 +7422,9 @@ int cmd_charge_control(int argc, char *argv[])
 			return rv;
 		}
 		printf("Charge mode = %s (%d)\n",
-		       r.mode < ARRAY_SIZE(charge_mode_text)
-		       		? charge_mode_text[r.mode] : "UNDEFINED",
-		       r.mode);
+			r.mode < ARRAY_SIZE(charge_mode_text)
+			? charge_mode_text[r.mode] : "UNDEFINED",
+			r.mode);
 		printf("Battery sustainer = %s (%d%% ~ %d%%)\n",
 		       (r.sustain_soc.lower != -1 && r.sustain_soc.upper != -1)
 				? "on" : "off",
@@ -7485,8 +7485,8 @@ int cmd_charge_control(int argc, char *argv[])
 	switch (p.mode) {
 	case CHARGE_CONTROL_NORMAL:
 		printf("Charge state machine is in normal mode%s.\n",
-		       (p.sustain_soc.lower == -1 || p.sustain_soc.upper == -1)
-		       		? "" : " with sustainer enabled");
+			(p.sustain_soc.lower == -1 || p.sustain_soc.upper == -1)
+			? "" : " with sustainer enabled");
 		break;
 	case CHARGE_CONTROL_IDLE:
 		printf("Charge state machine force idle.\n");

@@ -8,5 +8,6 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+uint32_t get_system_percentage(void);
 
 #endif /* __CROS_EC_BASEBOARD_H */

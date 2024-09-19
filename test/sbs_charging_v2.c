@@ -19,8 +19,6 @@
 #define WAIT_CHARGER_TASK 600
 #define BATTERY_DETACH_DELAY 35000
 
-enum ec_charge_control_mode get_chg_ctrl_mode(void);
-
 static int mock_chipset_state = CHIPSET_STATE_ON;
 static int is_shutdown;
 static int is_force_discharge;
