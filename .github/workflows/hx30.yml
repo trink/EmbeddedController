@@ -12,7 +12,7 @@ jobs:
         run: sudo apt install gcc-arm-none-eabi libftdi1-dev
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: build hx30 board
         env:
           BOARD: hx30
@@ -25,7 +25,7 @@ jobs:
         run: |
           echo "VERSIONINFO=$(date -u +'%Y-%m-%d-%H-%M-%S')_$GITHUB_SHA" >> $GITHUB_ENV
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: hx30.${{ env.VERSIONINFO }}.bin
           path: build/hx30/ec.bin
