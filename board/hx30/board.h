@@ -457,6 +457,13 @@
 
 #define CONFIG_WP_ACTIVE_HIGH
 
+/*
+ * Enable Virtual temp for better fan running
+ * also smooth fan up/down rate.
+ */
+#define CONFIG_FAN_VIRTUAL_TEMP
+
+
 /* LED signals */
 /*
 #define GPIO_BAT_LED_RED    GPIO_BATT_LOW_LED_L

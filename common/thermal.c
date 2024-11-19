@@ -60,7 +60,7 @@ static void thermal_control(void)
 	int temp_fan_configured;
 
 #ifdef CONFIG_CUSTOM_FAN_CONTROL
-	int temp[TEMP_SENSOR_COUNT];
+	int temp[TEMP_SENSOR_COUNT] = {0};
 #endif
 
 	/* Get ready to count things */
@@ -86,6 +86,11 @@ static void thermal_control(void)
 			continue;
 		else
 			num_sensors_read++;
+
+#if defined(CONFIG_FANS) && defined(CONFIG_CUSTOM_FAN_CONTROL)
+		/* Store all sensors value */
+		temp[i] = K_TO_C(t);
+#endif
 
 		/* check all the limits */
 		for (j = 0; j < EC_TEMP_THRESH_COUNT; j++) {
