@@ -95,12 +95,13 @@ void board_override_fan_control(int fan, int *temp)
 		apu_filtered_temp = thermal_filter_get(&apu_filtered);
 
 		/* Note this gets the index based on the thermal sensor index */
-		f75303_get_val_mk(temp_sensors[TEMP_SENSOR_CPU].idx , &temps_mk[1]);
+		f75303_get_val_mk(temp_sensors[TEMP_SENSOR_CPU].idx, &temps_mk[1]);
 		if (thermal_params[TEMP_SENSOR_CPU].temp_fan_off &&
 			thermal_params[TEMP_SENSOR_CPU].temp_fan_max) {
-			apu_pct = thermal_fan_percent(thermal_params[TEMP_SENSOR_CPU].temp_fan_off * 1000,
-						thermal_params[TEMP_SENSOR_CPU].temp_fan_max * 1000,
-						temps_mk[1]);
+			apu_pct = thermal_fan_percent(
+					thermal_params[TEMP_SENSOR_CPU].temp_fan_off * 1000,
+					thermal_params[TEMP_SENSOR_CPU].temp_fan_max * 1000,
+					temps_mk[1]);
 		}
 
 		if (thermal_params[TEMP_SENSOR_PECI].temp_fan_off &&
@@ -112,7 +113,7 @@ void board_override_fan_control(int fan, int *temp)
 		}
 		pct = apu_filtered_pct;
 
-		//pct = MAX(apu_pct, apu_filtered_pct);
+		/*pct = MAX(apu_pct, apu_filtered_pct);*/
 		new_rpm = fan_percent_to_rpm(fan, pct);
 		actual_rpm = fan_get_rpm_actual(FAN_CH(fan));
 
