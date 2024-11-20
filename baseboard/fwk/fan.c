@@ -176,11 +176,11 @@ void fan_set_rpm_target(int ch, int rpm)
 
 	if (ch < 0 || ch > MCHP_TACH_ID_MAX || ch > FAN_CH_COUNT)
 		return;
-	/* Keep the fan spinning at min speed for a 10s after we transition to 0 rpm*/
+	/* Keep the fan spinning at min speed for a minute after we transition to 0 rpm*/
 	if (rpm == 0 && rpm_setting[ch] != rpm) {
 		timestamp_t now = get_time();
 
-		fan_spindown_time.val = now.val + 10*SECOND;
+		fan_spindown_time.val = now.val + 60*SECOND;
 	}
 	rpm_setting[ch] = rpm;
 	if (chipset_in_state(CHIPSET_STATE_ON) && rpm == 0 &&
