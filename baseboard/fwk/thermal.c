@@ -43,22 +43,6 @@ bool log_thermal;
 /* battery-temp */
 #define TEMP_BATTERY TEMP_SENSOR_BATTERY
 
-/* TODO: Rename to SOC */
-/* soc-temp */
-#define TEMP_APU TEMP_SENSOR_PECI
-
-/* ddr-f75303 */
-#define TEMP_DDR TEMP_SENSOR_DDR
-#define TEMP_DDR_F TEMP_SENSOR_DDR
-
-/* cpu-f75303 */
-#define TEMP_CPU TEMP_SENSOR_CPU
-#define TEMP_CPU_F TEMP_SENSOR_CPU
-
-/* local-f75397 */
-#define TEMP_LOCAL TEMP_SENSOR_LOCAL
-#define TEMP_LOCAL_F TEMP_SENSOR_LOCAL
-
 
 int fan_percent_to_rpm(int fan_index, int temp_ratio)
 {
@@ -77,7 +61,6 @@ int fan_percent_to_rpm(int fan_index, int temp_ratio)
 void board_override_fan_control(int fan, int *temp)
 {
 	int actual_rpm, new_rpm;
-	int apu_temp_mk = 0;
 
 	int apu_pct = 0;
 	int pct = 0;
@@ -106,28 +89,29 @@ void board_override_fan_control(int fan, int *temp)
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
 
 		if (fan == 0)
-			thermal_filter_update(&apu_filtered, temp[TEMP_APU]);
-
-		/*f75303_get_val_mk(TEMP_CPU_F, &apu_temp_mk); */
+			thermal_filter_update(&apu_filtered, temp[TEMP_SENSOR_PECI]);
 
 		apu_filtered_temp = thermal_filter_get(&apu_filtered);
 
-		f75303_get_val_mk(TEMP_CPU_F, &temps_mk[1]);
-		if (thermal_params[TEMP_CPU].temp_fan_off &&
-			thermal_params[TEMP_CPU].temp_fan_max) {
-			apu_pct = thermal_fan_percent(thermal_params[TEMP_CPU].temp_fan_off * 1000,
-						thermal_params[TEMP_CPU].temp_fan_max * 1000,
+		/* Note this gets the index based on the thermal sensor index */
+		f75303_get_val_mk(temp_sensors[TEMP_SENSOR_CPU].idx , &temps_mk[1]);
+		if (thermal_params[TEMP_SENSOR_CPU].temp_fan_off &&
+			thermal_params[TEMP_SENSOR_CPU].temp_fan_max) {
+			apu_pct = thermal_fan_percent(thermal_params[TEMP_SENSOR_CPU].temp_fan_off * 1000,
+						thermal_params[TEMP_SENSOR_CPU].temp_fan_max * 1000,
 						temps_mk[1]);
 		}
 
-		if (thermal_params[TEMP_APU].temp_fan_off &&
-			thermal_params[TEMP_APU].temp_fan_max) {
+		if (thermal_params[TEMP_SENSOR_PECI].temp_fan_off &&
+			thermal_params[TEMP_SENSOR_PECI].temp_fan_max) {
 			apu_filtered_pct = thermal_fan_percent(
-				thermal_params[TEMP_APU].temp_fan_off * 1000,
-				thermal_params[TEMP_APU].temp_fan_max * 1000,
+				thermal_params[TEMP_SENSOR_PECI].temp_fan_off * 1000,
+				thermal_params[TEMP_SENSOR_PECI].temp_fan_max * 1000,
 				C_TO_K(apu_filtered_temp)*1000);
 		}
-		pct = MAX(apu_pct, apu_filtered_pct);
+		pct = apu_filtered_pct;
+
+		//pct = MAX(apu_pct, apu_filtered_pct);
 		new_rpm = fan_percent_to_rpm(fan, pct);
 		actual_rpm = fan_get_rpm_actual(FAN_CH(fan));
 
@@ -144,8 +128,8 @@ void board_override_fan_control(int fan, int *temp)
 			/* add temperature histeresis so the fan does not turn off
 			 * unless the system has cooled 0.5C below the fan turn on temperature
 			 */
-			if (thermal_params[TEMP_APU].temp_fan_off &&
-				apu_temp_mk > (thermal_params[TEMP_APU].temp_fan_off
+			if (thermal_params[TEMP_SENSOR_CPU].temp_fan_off &&
+				temps_mk[1] > (thermal_params[TEMP_SENSOR_CPU].temp_fan_off
 					* 1000 - 500)) {
 				deadline.val = get_time().val + FAN_STOP_DELAY_S;
 			}
@@ -156,9 +140,9 @@ void board_override_fan_control(int fan, int *temp)
 		}
 
 		if (log_thermal && fan == 0) {
-			f75303_get_val_mk(TEMP_DDR_F, &temps_mk[0]);
-			f75303_get_val_mk(TEMP_CPU_F, &temps_mk[1]);
-			f75397_get_val_mk(TEMP_LOCAL_F, &temps_mk[2]);
+			f75303_get_val_mk(temp_sensors[TEMP_SENSOR_DDR].idx, &temps_mk[0]);
+			f75303_get_val_mk(temp_sensors[TEMP_SENSOR_CPU].idx, &temps_mk[1]);
+			f75397_get_val_mk(temp_sensors[TEMP_SENSOR_LOCAL].idx, &temps_mk[2]);
 			CPRINTS(
 				"\tThrm\t%d\t%d\t%d\t"
 				"\t%d\t%d\t"
@@ -168,7 +152,7 @@ void board_override_fan_control(int fan, int *temp)
 				MILLI_KELVIN_TO_CELSIUS(temps_mk[0]),
 				MILLI_KELVIN_TO_CELSIUS(temps_mk[1]),
 				MILLI_KELVIN_TO_CELSIUS(temps_mk[2]),
-				temp[TEMP_BATTERY], temp[TEMP_APU],
+				temp[TEMP_SENSOR_BATTERY], temp[TEMP_SENSOR_PECI],
 				thermal_filter_get(&apu_filtered),
 				pct, apu_pct, apu_filtered_pct,
 				new_rpm, actual_rpm);
