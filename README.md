@@ -28,6 +28,7 @@ The different Framework Laptops are each implemented as their own board:
 | --- | --- |
 | Intel 11th Gen Core Processors  | `hx20` |
 | Intel 12th Gen Core Processors  | `hx30` |
+| Intel 13th Gen Core Processors  | `hx30` |
 
 Building the project - run the command for the processor you have:
 
@@ -35,7 +36,7 @@ Building the project - run the command for the processor you have:
 # hx20 (11th Gen)
 make BOARD=hx20 CROSS_COMPILE=arm-none-eabi-
 
-# hx30 (12th Gen)
+# hx30 (12th and 13th Gen)
 make BOARD=hx30 CROSS_COMPILE=arm-none-eabi-
 ```
 
