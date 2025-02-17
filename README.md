@@ -18,6 +18,7 @@ On Ubuntu you can install the development tools easily.
 
 ```sh
 sudo apt install gcc-arm-none-eabi libftdi1-dev build-essential pkg-config
+sudo apt-get install gawk 
 ```
 
 ## Framework Laptop EC
