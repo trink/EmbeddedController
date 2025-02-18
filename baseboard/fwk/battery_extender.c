@@ -6,10 +6,16 @@
 
 #include "battery.h"
 #include "baseboard_host_commands.h"
+#include "battery.h"
+#include "battery_smart.h"
 #include "charge_state.h"
+#include "charger.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
+#include "host_command.h"
+#include "host_command_customization.h"
+#include "system.h"
 #include "timer.h"
 #include "util.h"
 #include "hooks.h"
@@ -18,6 +24,8 @@
 #include "task.h"
 #include "config.h"
 #include "console.h"
+
+#include "keyboard_customization.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
@@ -44,7 +52,11 @@ static timestamp_t batt_extender_deadline;
 static timestamp_t batt_extender_deadline_stage2;
 
 static timestamp_t reset_deadline;
+static int sustainer_lower = 100;
+static int sustainer_upper = 100;
 
+static uint8_t charging_maximum_level = NEED_RESTORE;
+static uint8_t old_charger_limit;
 
 static void extender_init(void)
 {
@@ -58,12 +70,44 @@ static void extender_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, extender_init, HOOK_PRIO_DEFAULT);
 
+int charger_sustainer_percentage(void)
+{
+	if (!charging_maximum_level)
+		return 100;
+	return charging_maximum_level;
+}
+
+static void battery_percentage_control(void)
+{
+	if (charging_maximum_level == NEED_RESTORE) {
+		system_get_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, &charging_maximum_level);
+		if (charging_maximum_level & CHG_LIMIT_OVERRIDE)
+			charging_maximum_level = charging_maximum_level & 0x64;
+	}
+
+	if (charging_maximum_level & CHG_LIMIT_OVERRIDE ||
+		!charging_maximum_level) {
+		battery_sustainer_set(-1, -1);
+		set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
+		return;
+	}
+
+	if (old_charger_limit != charging_maximum_level) {
+		old_charger_limit = charging_maximum_level;
+		battery_sustainer_set(MAX(20, (charging_maximum_level - 5)),
+			MAX(20, charging_maximum_level));
+	}
+}
 
 void battery_extender(void)
 {
 	timestamp_t now = get_time();
 
-	if (batt_extender_disable) {
+	if (stage == BATT_EXTENDER_STAGE_0)
+		battery_percentage_control();
+
+	/* don't runnig extender when unit in factory mode */
+	if (batt_extender_disable || factory_status()) {
 		stage = BATT_EXTENDER_STAGE_0;
 		reset_deadline.val = 0;
 		batt_extender_deadline.val = 0;
@@ -74,6 +118,16 @@ void battery_extender(void)
 	if (extpower_is_present()) {
 		/* just keep pushing the reset timer into the future if we are on AC */
 		reset_deadline.val = now.val + battery_extender_reset;
+	}
+
+	if (sustainer_upper != charger_sustainer_percentage()) {
+		sustainer_upper = charger_sustainer_percentage();
+		sustainer_lower = sustainer_upper - 5;
+		/* if we already trigger stage, set 5 SECOND to update the sustainer again */
+		if (stage == BATT_EXTENDER_STAGE_1) {
+			batt_extender_deadline.val = now.val + 5 * SECOND;
+		} else if (stage == BATT_EXTENDER_STAGE_2)
+			batt_extender_deadline_stage2.val = now.val + 5 * SECOND;
 	}
 
 	if (reset_deadline.val &&
@@ -93,14 +147,12 @@ void battery_extender(void)
 			timestamp_expired(batt_extender_deadline_stage2, &now)) {
 		batt_extender_deadline_stage2.val = 0;
 		stage = BATT_EXTENDER_STAGE_2;
-		battery_sustainer_set(85, 87);
-	}
-
-	else if (batt_extender_deadline.val &&
+		battery_sustainer_set(MIN(85, sustainer_lower), MIN(87, sustainer_upper));
+	} else if (batt_extender_deadline.val &&
 			timestamp_expired(batt_extender_deadline, &now)) {
 		batt_extender_deadline.val = 0;
 		stage = BATT_EXTENDER_STAGE_1;
-		battery_sustainer_set(90, 95);
+		battery_sustainer_set(MIN(90, sustainer_lower), MIN(95, sustainer_upper));
 	}
 }
 DECLARE_HOOK(HOOK_SECOND, battery_extender, HOOK_PRIO_DEFAULT);
@@ -175,6 +227,43 @@ static enum ec_status battery_extender_hc(struct host_cmd_handler_args *args)
 		return EC_ERROR_PARAM1;
 }
 DECLARE_HOST_COMMAND(EC_CMD_BATTERY_EXTENDER, battery_extender_hc, EC_VER_MASK(0));
+
+/*****************************************************************************/
+/* Host command */
+
+static enum ec_status cmd_charging_limit_control(struct host_cmd_handler_args *args)
+{
+
+	const struct ec_params_ec_chg_limit_control *p = args->params;
+	struct ec_response_chg_limit_control *r = args->response;
+
+	if (p->modes & CHG_LIMIT_DISABLE) {
+		charging_maximum_level = 0;
+		system_set_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, 0);
+	}
+
+	if (p->modes & CHG_LIMIT_SET_LIMIT) {
+		if (p->max_percentage < 20)
+			return EC_RES_ERROR;
+
+		charging_maximum_level = p->max_percentage;
+		system_set_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, charging_maximum_level);
+	}
+
+	if (p->modes & CHG_LIMIT_OVERRIDE)
+		charging_maximum_level = charging_maximum_level | CHG_LIMIT_OVERRIDE;
+
+	if (p->modes & CHG_LIMIT_GET_LIMIT) {
+		system_get_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, &r->max_percentage);
+		args->response_size = sizeof(*r);
+	}
+
+	battery_percentage_control();
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_CHARGE_LIMIT_CONTROL, cmd_charging_limit_control,
+			EC_VER_MASK(0));
 
 static uint64_t cmd_parse_timestamp(int argc, char **argv)
 {
@@ -294,6 +383,9 @@ static int cmd_batt_extender(int argc, char **argv)
 			CPRINTF("\t - expires in: ");
 			print_time_offset(reset_deadline.val, now.val);
 		}
+		CPRINTF("\tsustainer percentage:\n");
+		CPRINTF("\tlower: %d, upper: %d\n", sustainer_lower, sustainer_upper);
+		CPRINTF("\tUser charge limit:%d\n", charging_maximum_level);
 	}
 
 	return EC_SUCCESS;
