@@ -90,7 +90,11 @@ int f75397_get_val(int idx, int *temp)
 	if (!f75397_enabled)
 		return EC_ERROR_NOT_POWERED;
 
+#ifndef CONFIG_CUSTOMIZED_DESIGN
+	*temp = temps[idx];
+#else
 	*temp = MILLI_KELVIN_TO_KELVIN(temps[idx]);
+#endif
 	return EC_SUCCESS;
 }
 

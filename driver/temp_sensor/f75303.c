@@ -100,7 +100,11 @@ int f75303_get_val(int idx, int *temp)
 	if (!f75303_enabled)
 		return EC_ERROR_NOT_POWERED;
 
+#ifndef CONFIG_CUSTOMIZED_DESIGN
+	*temp = temps[idx];
+#else
 	*temp = MILLI_KELVIN_TO_KELVIN(temps[idx]);
+#endif
 	return EC_SUCCESS;
 }
 
