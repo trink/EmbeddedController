@@ -407,8 +407,8 @@
 
 /* Support FAN */
 #define CONFIG_FANS 1
-#define CONFIG_CUSTOM_FAN_CONTROL
-#define CONFIG_FAN_RPM_CUSTOM
+/*#define CONFIG_CUSTOM_FAN_CONTROL*/
+/*#define CONFIG_FAN_RPM_CUSTOM*/
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 15
 #define FAN_HARDARE_MAX 7100
@@ -467,14 +467,14 @@
  * Enable Virtual temp for better fan running
  * also smooth fan up/down rate.
  */
-#define CONFIG_FAN_VIRTUAL_TEMP
+/*#define CONFIG_FAN_VIRTUAL_TEMP*/
 
 /*
  * Enable more temp memmap for intel DTT
  */
-#define CONFIG_DTT_SUPPORT
+/*#define CONFIG_DTT_SUPPORT*/
 
-#define CONFIG_CUSTOMIZED_DESIGN
+/*#define CONFIG_CUSTOMIZED_DESIGN*/
 
 /* LED signals */
 /*
