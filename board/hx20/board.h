@@ -452,6 +452,11 @@
 
 #define CONFIG_WP_ACTIVE_HIGH
 
+/*
+ * fixed hx20 build error reason: undefined reference to `round_divide'
+ */
+#define CONFIG_MATH_UTIL
+
 /* LED signals */
 /*
 #define GPIO_BAT_LED_RED    GPIO_BATT_LOW_LED_L

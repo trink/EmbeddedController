@@ -26,6 +26,14 @@
 /*****************************************************************************/
 /* EC-specific thermal controls */
 
+#ifdef CONFIG_CUSTOMIZED_DESIGN
+
+__overridable void board_update_temperature_mk(enum temp_sensor_id id)
+{
+}
+
+#endif
+
 test_mockable_static void smi_sensor_failure_warning(void)
 {
 	CPRINTS("can't read any temp sensors!");
@@ -60,7 +68,7 @@ static void thermal_control(void)
 	int temp_fan_configured;
 
 #ifdef CONFIG_CUSTOM_FAN_CONTROL
-	int temp[TEMP_SENSOR_COUNT];
+	int temp[TEMP_SENSOR_COUNT] = {0};
 #endif
 
 	/* Get ready to count things */
@@ -77,15 +85,15 @@ static void thermal_control(void)
 		/* read one */
 		rv = temp_sensor_read(i, &t);
 
-#ifdef CONFIG_CUSTOM_FAN_CONTROL
-		/* Store all sensors value */
-		temp[i] = K_TO_C(t);
-#endif
-
 		if (rv != EC_SUCCESS)
 			continue;
 		else
 			num_sensors_read++;
+
+#if defined(CONFIG_FANS) && defined(CONFIG_CUSTOM_FAN_CONTROL)
+		/* Store all sensors value */
+		temp[i] = K_TO_C(t);
+#endif
 
 		/* check all the limits */
 		for (j = 0; j < EC_TEMP_THRESH_COUNT; j++) {

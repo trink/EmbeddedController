@@ -51,6 +51,12 @@ struct charge_state_data {
 #endif
 };
 
+struct sustain_soc {
+	int8_t lower;
+	int8_t upper;
+	uint8_t flags; /* enum ec_charge_control_flag */
+};
+
 /**
  * Set the output current limit and voltage. This is used to provide power from
  * the charger chip ("OTG" mode).
@@ -192,5 +198,7 @@ void charge_reset_stable_current_us(uint64_t us);
 bool charge_is_current_stable(void);
 
 int set_chg_ctrl_mode(enum ec_charge_control_mode mode);
+
+enum ec_charge_control_mode get_chg_ctrl_mode(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */

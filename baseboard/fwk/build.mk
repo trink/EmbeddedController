@@ -12,3 +12,5 @@ baseboard-$(CONFIG_FANS)+=fan.o
 baseboard-$(CONFIG_SYSTEMSERIAL_DEBUG) += system_serial.o
 baseboard-$(CONFIG_8042_AUX) += ps2mouse.o
 baseboard-$(HAS_TASK_HOSTCMD) += baseboard_host_commands.o
+baseboard-$(CONFIG_CHARGE_MANAGER) += battery_extender.o
+baseboard-$(CONFIG_FAN_VIRTUAL_TEMP) += temperature_filter.o thermal.o

@@ -467,9 +467,9 @@ void cypd_enque_evt(int evt, int delay);
 void enable_compliance_mode(int controller);
 void disable_compliance_mode(int controller);
 
-void entry_tbt_mode(int controller);
+int entry_tbt_mode(int controller);
 
-void exit_tbt_mode(int controller);
+int exit_tbt_mode(int controller);
 
 int check_tbt_mode(int controller);
 

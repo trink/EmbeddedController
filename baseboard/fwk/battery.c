@@ -119,7 +119,6 @@ const struct battery_info *battery_get_info(void)
 }
 
 static enum battery_present batt_pres_prev = BP_NOT_SURE;
-static uint8_t charging_maximum_level = NEED_RESTORE;
 static int old_btp;
 
 int board_cut_off_battery(void)
@@ -212,6 +211,21 @@ enum battery_present battery_is_present(void)
 	return batt_pres;
 }
 
+uint32_t get_system_percentage(void)
+{
+	static uint32_t pre_os_percentage;
+	uint32_t memmap_cap = *(uint32_t *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	uint32_t memmap_lfcc = *(uint32_t *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	uint32_t os_percentage = 1000 * memmap_cap / (memmap_lfcc + 1);
+
+	/* ensure this value is valid */
+	if (os_percentage <= 1000 && os_percentage >= 0) {
+		pre_os_percentage = os_percentage;
+		return os_percentage;
+	} else
+		return pre_os_percentage;
+}
+
 #ifdef CONFIG_EMI_REGION1
 
 void battery_customize(struct charge_state_data *emi_info)
@@ -248,7 +262,7 @@ void battery_customize(struct charge_state_data *emi_info)
 
 	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_AVER_TEMP) = 
 							(emi_info->batt.temperature - 2731)/10;
-	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_PERCENTAGE) = emi_info->batt.display_charge/10;
+	*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_PERCENTAGE) = get_system_percentage() / 10;
 	
 	if (emi_info->batt.status & STATUS_FULLY_CHARGED)
 		*host_get_customer_memmap(EC_MEMMAP_ER1_BATT_STATUS) |= EC_BATT_FLAG_FULL;
@@ -310,40 +324,6 @@ void battery_customize(struct charge_state_data *emi_info)
 }
 
 #endif
-
-static void battery_percentage_control(void)
-{
-	enum ec_charge_control_mode new_mode;
-	int rv;
-
-
-	if (charging_maximum_level == NEED_RESTORE)
-		system_get_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, &charging_maximum_level);
-
-	if (charging_maximum_level & CHG_LIMIT_OVERRIDE) {
-		new_mode = CHARGE_CONTROL_NORMAL;
-		if (charge_get_percent() == 100)
-			charging_maximum_level = charging_maximum_level | 0x64;
-	} else if (charging_maximum_level < 20)
-		new_mode = CHARGE_CONTROL_NORMAL;
-	else if (charge_get_percent() > charging_maximum_level)
-		new_mode = CHARGE_CONTROL_DISCHARGE;
-	else if (charge_get_percent() == charging_maximum_level)
-		new_mode = CHARGE_CONTROL_IDLE;
-	else
-		new_mode = CHARGE_CONTROL_NORMAL;
-
-	ccprints("Charge Limit mode = %d", new_mode);
-
-	set_chg_ctrl_mode(new_mode);
-#ifdef CONFIG_CHARGER_DISCHARGE_ON_AC
-	rv = charger_discharge_on_ac(new_mode == CHARGE_CONTROL_DISCHARGE);
-#endif
-	if (rv != EC_SUCCESS)
-		ccprintf("fail to discharge.");
-}
-DECLARE_HOOK(HOOK_AC_CHANGE, battery_percentage_control, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, battery_percentage_control, HOOK_PRIO_DEFAULT);
 
 static void fix_single_param(int flag, int *cached, int *curr)
 {
@@ -445,44 +425,7 @@ __override void board_battery_compensate_params(struct batt_params *batt)
 	batt->flags &= ~BATT_FLAG_BAD_ANY;
 	batt->flags |= BATT_FLAG_RESPONSIVE;
 	batt_cache.flags |= BATT_FLAG_RESPONSIVE;
+
+	/* override the display charge value for Windows system */
+	batt->display_charge = get_system_percentage();
 }
-
-/*****************************************************************************/
-/* Customize host command */
-
-/*
- * Charging limit control.
- */
-static enum ec_status cmd_charging_limit_control(struct host_cmd_handler_args *args)
-{
-
-	const struct ec_params_ec_chg_limit_control *p = args->params;
-	struct ec_response_chg_limit_control *r = args->response;
-
-	if (p->modes & CHG_LIMIT_DISABLE) {
-		charging_maximum_level = 0;
-		system_set_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, 0);
-	}
-
-	if (p->modes & CHG_LIMIT_SET_LIMIT) {
-		if( p->max_percentage < 20 )
-			return EC_RES_ERROR;
-
-		charging_maximum_level = p->max_percentage;
-		system_set_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, charging_maximum_level);
-	}
-
-	if (p->modes & CHG_LIMIT_OVERRIDE)
-		charging_maximum_level = charging_maximum_level | CHG_LIMIT_OVERRIDE;
-
-	if (p->modes & CHG_LIMIT_GET_LIMIT) {
-		system_get_bbram(SYSTEM_BBRAM_IDX_CHG_MAX, &r->max_percentage);
-		args->response_size = sizeof(*r);
-	}
-
-	battery_percentage_control();
-
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_CHARGE_LIMIT_CONTROL, cmd_charging_limit_control,
-			EC_VER_MASK(0));

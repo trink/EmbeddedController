@@ -259,6 +259,24 @@ int cypd_write_reg8_wait_ack(int controller, int reg, int data, int delay_ms)
 			default:
 				CPRINTS("Check AC get unknown event 0x%04x", event);
 			}
+		} else if (data == CYP5525_ICL_CTRL_REG ||
+				data == CYP5525_ICL_BB_RETIMER_CMD_REG ||
+				data == CYP5525_ICL_BB_RETIMER_DAT_REG) {
+			rv = cypd_read_reg8(controller, CYP5525_RESPONSE_REG, &event);
+			if (rv != EC_SUCCESS)
+				CPRINTS("fail to read response");
+			switch (event) {
+			case CYPD_RESPONSE_SUCCESS:
+				rv = EC_SUCCESS;
+				break;
+			case CYPD_RESPONSE_INVALID_ARGUMENTS:
+				CPRINTS("CYPD_RESPONSE_INVALID_ARGUMENTS cmd:%x", data);
+				rv = EC_ERROR_INVAL;
+				break;
+			default:
+				rv = EC_ERROR_INVAL;
+				CPRINTS("Check AC get unknown event 0x%04x", event);
+			}
 		}
 		cypd_clear_int(controller, CYP5525_DEV_INTR);
 	}
@@ -390,24 +408,46 @@ void disable_compliance_mode(int controller)
 		CPRINTS("Write CYP5525_ICL_BB_RETIMER_CMD_REG fail");
 }
 
-void entry_tbt_mode(int controller)
+int entry_tbt_mode(int controller)
 {
 	int rv;
 	uint8_t force_tbt_mode = 0x01;
+	int force_retimer_power = 0x0100;
 
-	rv = cypd_write_reg8(controller, CYP5525_ICL_CTRL_REG, force_tbt_mode);
+	/* Write 0x0100 to address 0x0046 */
+	rv = cypd_write_reg16(controller, CYP5525_ICL_BB_RETIMER_CMD_REG, force_retimer_power);
+	if (rv != EC_SUCCESS) {
+		CPRINTS("Write CYP5525_ICL_BB_RETIMER_CMD_REG fail");
+		return rv;
+	}
+
+	/* according  to HPI spec after write 0x40 need wait 100~125ms */
+	rv = cypd_write_reg8_wait_ack(controller, CYP5525_ICL_CTRL_REG, force_tbt_mode, 110);
 	if (rv != EC_SUCCESS)
 		CPRINTS("Write CYP5525_ICL_CTRL_REG fail");
+
+	return rv;
 }
 
-void exit_tbt_mode(int controller)
+int exit_tbt_mode(int controller)
 {
 	int rv;
 	uint8_t force_tbt_mode = 0x00;
+	int force_retimer_power = 0x0000;
 
-	rv = cypd_write_reg8(controller, CYP5525_ICL_CTRL_REG, force_tbt_mode);
-	if (rv != EC_SUCCESS)
+	/* according  to HPI spec after write 0x40 need wait 100~125ms */
+	rv = cypd_write_reg8_wait_ack(controller, CYP5525_ICL_CTRL_REG, force_tbt_mode, 110);
+	if (rv != EC_SUCCESS) {
 		CPRINTS("Write CYP5525_ICL_CTRL_REG fail");
+		return rv;
+	}
+
+	/* Write 0x0000 to address 0x0046 */
+	rv = cypd_write_reg16(controller, CYP5525_ICL_BB_RETIMER_CMD_REG, force_retimer_power);
+	if (rv != EC_SUCCESS)
+		CPRINTS("Write CYP5525_ICL_BB_RETIMER_CMD_REG fail");
+
+	return rv;
 }
 
 int check_tbt_mode(int controller)

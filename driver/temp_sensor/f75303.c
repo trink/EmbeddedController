@@ -11,6 +11,11 @@
 #include "hooks.h"
 #include "util.h"
 #include "console.h"
+#include "math_util.h"
+
+#define F75303_RESOLUTION 11
+#define F75303_SHIFT1 (16 - F75303_RESOLUTION)
+#define F75303_SHIFT2 (F75303_RESOLUTION - 8)
 
 static int temps[F75303_IDX_COUNT];
 static int8_t fake_temp[F75303_IDX_COUNT] = {-1, -1, -1};
@@ -33,6 +38,7 @@ static int raw_read8(const int offset, int *data)
 			 offset, data);
 }
 
+#ifndef CONFIG_CUSTOMIZED_DESIGN
 static int get_temp(const int offset, int *temp)
 {
 	int rv;
@@ -47,6 +53,40 @@ static int get_temp(const int offset, int *temp)
 	*temp = C_TO_K(temp_raw);
 	return EC_SUCCESS;
 }
+#else
+static int get_temp(const int offset, int *temp)
+{
+	int rv;
+	int data = 0;
+	int temp_raw = 0;
+
+	/* read high byte (1 degree) and low byte (0.125 degree)*/
+	switch (offset) {
+	case F75303_TEMP_LOCAL_REGISTER:
+		rv = raw_read8(offset, &temp_raw);
+		rv = raw_read8(F75303_TEMP_LOCAL_LOW_REGISTER, &data);
+		break;
+	case F75303_TEMP_REMOTE1_REGISTER:
+		rv = raw_read8(offset, &temp_raw);
+		rv = raw_read8(F75303_TEMP_REMOTE1_LOW_REGISTER, &data);
+		break;
+	case F75303_TEMP_REMOTE2_REGISTER:
+		rv = raw_read8(offset, &temp_raw);
+		rv = raw_read8(F75303_TEMP_REMOTE2_LOW_REGISTER, &data);
+		break;
+	default:
+		rv = EC_ERROR_INVAL;
+	}
+
+	if (rv != 0)
+		return rv;
+
+	temp_raw = (temp_raw * 1000) + ((data >> 4) * 125);
+	*temp = MILLI_CELSIUS_TO_MILLI_KELVIN(temp_raw);
+
+	return EC_SUCCESS;
+}
+#endif /* !CONFIG_CUSTOMIZED_DESIGN */
 
 int f75303_get_val(int idx, int *temp)
 {
@@ -60,16 +100,47 @@ int f75303_get_val(int idx, int *temp)
 	if (!f75303_enabled)
 		return EC_ERROR_NOT_POWERED;
 
+#ifndef CONFIG_CUSTOMIZED_DESIGN
 	*temp = temps[idx];
+#else
+	*temp = MILLI_KELVIN_TO_KELVIN(temps[idx]);
+#endif
+	return EC_SUCCESS;
+}
+
+static inline int f75303_reg_to_mk(int16_t reg)
+{
+	int temp_mc;
+
+	temp_mc = (((reg >> F75303_SHIFT1) * 1000) >> F75303_SHIFT2);
+
+	return MILLI_CELSIUS_TO_MILLI_KELVIN(temp_mc);
+}
+
+int f75303_get_val_k(int idx, int *temp_k_ptr)
+{
+	if (idx >= F75303_IDX_COUNT)
+		return EC_ERROR_INVAL;
+
+	*temp_k_ptr = MILLI_KELVIN_TO_KELVIN(temps[idx]);
+	return EC_SUCCESS;
+}
+
+int f75303_get_val_mk(int idx, int *temp_mk_ptr)
+{
+	if (idx >= F75303_IDX_COUNT)
+		return EC_ERROR_INVAL;
+
+	*temp_mk_ptr = temps[idx];
 	return EC_SUCCESS;
 }
 
 static void f75303_sensor_poll(void)
 {
 	if (f75303_enabled) {
-		get_temp(F75303_TEMP_LOCAL, &temps[F75303_IDX_LOCAL]);
-		get_temp(F75303_TEMP_REMOTE1, &temps[F75303_IDX_REMOTE1]);
-		get_temp(F75303_TEMP_REMOTE2, &temps[F75303_IDX_REMOTE2]);
+		get_temp(F75303_TEMP_LOCAL_REGISTER, &temps[F75303_IDX_LOCAL]);
+		get_temp(F75303_TEMP_REMOTE1_REGISTER, &temps[F75303_IDX_REMOTE1]);
+		get_temp(F75303_TEMP_REMOTE2_REGISTER, &temps[F75303_IDX_REMOTE2]);
 	}
 }
 DECLARE_HOOK(HOOK_SECOND, f75303_sensor_poll, HOOK_PRIO_TEMP_SENSOR);

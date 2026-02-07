@@ -6,10 +6,10 @@ on:
 jobs:
   build:
     name: lint new changes
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: get checkpatch

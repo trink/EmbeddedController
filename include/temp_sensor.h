@@ -56,5 +56,12 @@ extern const struct temp_sensor_t temp_sensors[];
  * @return EC_SUCCESS, or non-zero if error.
  */
 int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr);
+#ifdef CONFIG_CUSTOMIZED_DESIGN
 
+/**
+ * Update the mk unit namespace for intel DTT feature
+ */
+__override_proto void board_update_temperature_mk(enum temp_sensor_id id);
+
+#endif
 #endif  /* __CROS_EC_TEMP_SENSOR_H */

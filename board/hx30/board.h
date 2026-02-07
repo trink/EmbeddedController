@@ -363,6 +363,8 @@
 #define EC_MEMMAP_ER1_BATT_MANUF_DAY		0x44 /* Manufacturer date - day */
 #define EC_MEMMAP_ER1_BATT_MANUF_MONTH		0x45 /* Manufacturer date - month */
 #define EC_MEMMAP_ER1_BATT_MANUF_YEAR		0x46 /* Manufacturer date - year */
+#define EC_CUSTOMIZED_MEMMAP_DTT_TEMP		0x60
+
 
 #define EC_BATT_FLAG_FULL		BIT(0) /* Full Charged */
 #define EC_BATT_TYPE			BIT(1) /* (0: NiMh,1: LION) */
@@ -405,6 +407,8 @@
 
 /* Support FAN */
 #define CONFIG_FANS 1
+/*#define CONFIG_CUSTOM_FAN_CONTROL*/
+/*#define CONFIG_FAN_RPM_CUSTOM*/
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 15
 #define FAN_HARDARE_MAX 7100
@@ -414,6 +418,8 @@
 #define CONFIG_TEMP_SENSOR_F75397
 #define F75303_I2C_ADDR_FLAGS 0x4D
 #define CONFIG_CHIPSET_CAN_THROTTLE		/* Enable EC_PROCHOT_L control */
+
+#define CONFIG_MATH_UTIL
 
 #define CONFIG_THROTTLE_AP
 
@@ -456,6 +462,19 @@
 
 
 #define CONFIG_WP_ACTIVE_HIGH
+
+/*
+ * Enable Virtual temp for better fan running
+ * also smooth fan up/down rate.
+ */
+/*#define CONFIG_FAN_VIRTUAL_TEMP*/
+
+/*
+ * Enable more temp memmap for intel DTT
+ */
+/*#define CONFIG_DTT_SUPPORT*/
+
+/*#define CONFIG_CUSTOMIZED_DESIGN*/
 
 /* LED signals */
 /*

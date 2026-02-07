@@ -147,6 +147,16 @@ int charge_get_battery_temp(int idx, int *temp_ptr);
  */
 const struct batt_params *charger_current_battery_params(void);
 
+/**
+ * Set the battery sustainer mode.
+ *
+ * @param lower: lower battery soc charge limit [1-100%] or -1 to disable
+ * @param upper: upper battery soc charge limit [1-100%] or -1 to disable
+ *
+ * @return EC_SUCCESS or EC_ERROR_INVAL
+ */
+int battery_sustainer_set(int8_t lower, int8_t upper);
+
 /* Config Charger */
 #include "charge_state_v2.h"
 
